@@ -68,13 +68,15 @@ public enum LineEnding: String, CaseIterable {
             dispatchGroup.enter()
             processingQueue.async {
                 var localHistogram: [LineEnding: Int] = [:]
-                for index in startIndex..<endIndex {
-                    guard let line = lineStorage.getLine(atIndex: index),
-                          let lineString = textStorage.substring(from: line.range),
-                          let lineEnding = LineEnding(line: lineString) else {
-                        continue
+                if endIndex > startIndex { // Do not parse if endIndex is higher than startIndex
+                    for index in startIndex..<endIndex {
+                        guard let line = lineStorage.getLine(atIndex: index),
+                              let lineString = textStorage.substring(from: line.range),
+                              let lineEnding = LineEnding(line: lineString) else {
+                            continue
+                        }
+                        localHistogram[lineEnding, default: 0] += 1
                     }
-                    localHistogram[lineEnding, default: 0] += 1
                 }
                 histogramLock.lock()
                 for (key, value) in localHistogram {

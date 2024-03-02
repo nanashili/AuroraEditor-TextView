@@ -129,10 +129,8 @@ public final class TreeSitterClient: HighlightProviding {
             try queueLock.unlock()
         } catch let error as PthreadError {
             print("Pthread mutex error: \(error)")
-            // Handle the error appropriately
         } catch {
             print("Unexpected error during setup: \(error)")
-            // Handle the unexpected error
         }
     }
 

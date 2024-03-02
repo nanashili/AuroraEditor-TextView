@@ -54,43 +54,36 @@ public enum LineEnding: String, CaseIterable {
         lineStorage: TextLineStorage<TextLine>,
         textStorage: NSTextStorage
     ) -> LineEnding {
-        let processingQueue = DispatchQueue(label: "com.auroraeditor.textview.lineeding.queue", attributes: .concurrent)
-        let dispatchGroup = DispatchGroup()
-        var histogram: [LineEnding: Int] = [:]
-        let histogramLock = NSLock()
+        var histogram: [LineEnding: Int] = LineEnding.allCases.reduce(into: [LineEnding: Int]()) {
+            $0[$1] = 0
+        }
+        var shouldContinue = true
+        var lineIterator = lineStorage.makeIterator()
 
-        let chunkSize = 1024
-        var startIndex = 0
-        let totalLines = lineStorage.count
-
-        while startIndex < totalLines {
-            let endIndex = min(startIndex + chunkSize, totalLines)
-            dispatchGroup.enter()
-            processingQueue.async {
-                var localHistogram: [LineEnding: Int] = [:]
-                if endIndex > startIndex { // Do not parse if endIndex is higher than startIndex
-                    for index in startIndex..<endIndex {
-                        guard let line = lineStorage.getLine(atIndex: index),
-                              let lineString = textStorage.substring(from: line.range),
-                              let lineEnding = LineEnding(line: lineString) else {
-                            continue
-                        }
-                        localHistogram[lineEnding, default: 0] += 1
-                    }
-                }
-                histogramLock.lock()
-                for (key, value) in localHistogram {
-                    histogram[key, default: 0] += value
-                }
-                histogramLock.unlock()
-                dispatchGroup.leave()
+        while let line = lineIterator.next(), shouldContinue {
+            guard let lineString = textStorage.substring(from: line.range),
+                  let lineEnding = LineEnding(line: lineString) else {
+                continue
             }
-            startIndex = endIndex
+            histogram[lineEnding] = histogram[lineEnding]! + 1
+            // after finding 15 lines of a line ending we assume it's correct.
+            if histogram[lineEnding]! >= 15 {
+                shouldContinue = false
+            }
         }
 
-        dispatchGroup.wait()
-
-        return histogram.max(by: { $0.value < $1.value })?.key ?? .lineFeed
+        let orderedValues = histogram.sorted(by: { $0.value > $1.value })
+        // Return the max of the histogram, but if there's no max
+        // we default to lineFeed. This should be a parameter in the future.
+        if orderedValues.count >= 2 {
+            if orderedValues[0].value == orderedValues[1].value {
+                return .lineFeed
+            } else {
+                return orderedValues[0].key
+            }
+        } else {
+            return .lineFeed
+        }
     }
 
     /// The UTF-16 length of the line ending character sequence.

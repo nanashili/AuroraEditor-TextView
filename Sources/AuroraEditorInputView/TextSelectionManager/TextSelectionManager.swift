@@ -148,32 +148,36 @@ public class TextSelectionManager: NSObject {
     // MARK: - Selection Views
 
     func updateSelectionViews() {
-        var didUpdate = false
+        var localDidUpdate = false
 
         for textSelection in textSelections {
-            updateCursorView(for: textSelection, didUpdate: &didUpdate)
-            removeSelectionViewIfNeeded(for: textSelection, didUpdate: &didUpdate)
+            updateCursorView(for: textSelection, didUpdate: &localDidUpdate)
+            removeSelectionViewIfNeeded(for: textSelection, didUpdate: &localDidUpdate)
         }
 
-        if didUpdate {
-            delegate?.setNeedsDisplay()
+        if localDidUpdate {
+            DispatchQueue.main.async {
+                self.delegate?.setNeedsDisplay()
+            }
         }
     }
 
-    private func updateCursorView(for textSelection: TextSelection,
-                                  didUpdate: inout Bool) {
-        guard textSelection.range.isEmpty,
-                let layoutManager = layoutManager,
+    private func updateCursorView(for textSelection: TextSelection, didUpdate: inout Bool) {
+        guard textSelection.range.isEmpty, let _ = layoutManager,
               shouldUpdateCursorView(for: textSelection) else { return }
 
-        textSelection.view?.removeFromSuperview()
+        DispatchQueue.main.async {
+            if let existingView = textSelection.view {
+                existingView.removeFromSuperview()
+            }
 
-        let cursorView = CursorView()
-        configureCursorView(cursorView, for: textSelection)
+            let cursorView = CursorView()
+            self.configureCursorView(cursorView, for: textSelection)
 
-        layoutView?.addSubview(cursorView)
-        textSelection.view = cursorView
-        textSelection.boundingRect = cursorView.frame
+            self.layoutView?.addSubview(cursorView)
+            textSelection.view = cursorView
+            textSelection.boundingRect = cursorView.frame
+        }
 
         didUpdate = true
     }
@@ -184,9 +188,9 @@ public class TextSelectionManager: NSObject {
             return false
         }
 
-        return textSelection.view == nil
-        || textSelection.boundingRect.origin != cursorOrigin
-        || textSelection.boundingRect.height != lineHeight
+        return textSelection.view == nil ||
+        textSelection.boundingRect.origin != cursorOrigin ||
+        textSelection.boundingRect.height != lineHeight
     }
 
     private func configureCursorView(_ cursorView: CursorView, for textSelection: TextSelection) {
@@ -201,11 +205,13 @@ public class TextSelectionManager: NSObject {
         cursorView.frame.origin.y += verticalOffset
     }
 
-    private func removeSelectionViewIfNeeded(for textSelection: TextSelection,
-                                             didUpdate: inout Bool) {
+    private func removeSelectionViewIfNeeded(for textSelection: TextSelection, didUpdate: inout Bool) {
         if !textSelection.range.isEmpty && textSelection.view != nil {
-            textSelection.view?.removeFromSuperview()
-            textSelection.view = nil
+            DispatchQueue.main.async {
+                textSelection.view?.removeFromSuperview()
+                textSelection.view = nil
+            }
+
             didUpdate = true
         }
     }

@@ -103,35 +103,24 @@ public final class TreeSitterClient: HighlightProviding {
     ///   - textView: The text view to use as a data source.
     ///               A weak reference will be kept for the lifetime of this object.
     ///   - codeLanguage: The language to use for parsing.
-    public func setUp(textView: HighlighterTextView,
-                      codeLanguage: CodeLanguage) {
+    public func setUp(textView: HighlighterTextView, codeLanguage: CodeLanguage) {
         cancelAllRunningTasks()
 
-        do {
-            try queueLock.lock()
+        queueLock.lock()
 
-            self.textView = textView
-            self.readBlock = textView.createReadBlock()
+        self.textView = textView
+        self.readBlock = textView.createReadBlock()
 
-            // Nested locking optimization
-            queuedEdits.append {
-                do {
-                    try self.stateLock.lock()
-                    self.state = TreeSitterState(codeLanguage: codeLanguage, textView: textView)
-                    try self.stateLock.unlock()
-                } catch {
-                    print("Error updating state: \(error)")
-                }
-            }
-
-            beginTasksIfNeeded()
-
-            try queueLock.unlock()
-        } catch let error as PthreadError {
-            print("Pthread mutex error: \(error)")
-        } catch {
-            print("Unexpected error during setup: \(error)")
+        // Nested locking optimization
+        queuedEdits.append {
+            self.stateLock.lock()
+            self.state = TreeSitterState(codeLanguage: codeLanguage, textView: textView)
+            self.stateLock.unlock()
         }
+
+        beginTasksIfNeeded()
+
+        queueLock.unlock()
     }
 
 
@@ -148,25 +137,19 @@ public final class TreeSitterClient: HighlightProviding {
                           completion: @escaping ((IndexSet) -> Void)) {
         guard let edit = InputEdit(range: range, delta: delta, oldEndPoint: .zero) else { return }
 
-        do {
-            try queueLock.lock()
+        queueLock.lock()
 
-            // Optimization: Calculate these outside the lock, if possible
-            let longEdit = range.length > Constants.maxSyncEditLength
-            let longDocument = textView.documentRange.length > Constants.maxSyncContentLength
+        // Optimization: Calculate these outside the lock, if possible
+        let longEdit = range.length > Constants.maxSyncEditLength
+        let longDocument = textView.documentRange.length > Constants.maxSyncContentLength
 
-            if hasOutstandingWork || longEdit || longDocument {
-                applyEditAsync(editState: EditState(edit: edit, completion: completion), startAtLayerIndex: 0)
-            } else {
-                applyEdit(editState: EditState(edit: edit, completion: completion))
-            }
-
-            try queueLock.unlock()
-        } catch let error as PthreadError {
-            print("Pthread mutex error: \(error)")
-        } catch {
-            print("Unexpected error during edit application: \(error)")
+        if hasOutstandingWork || longEdit || longDocument {
+            applyEditAsync(editState: EditState(edit: edit, completion: completion), startAtLayerIndex: 0)
+        } else {
+            applyEdit(editState: EditState(edit: edit, completion: completion))
         }
+
+        queueLock.unlock()
     }
 
 
@@ -178,24 +161,14 @@ public final class TreeSitterClient: HighlightProviding {
     public func queryHighlightsFor(textView: HighlighterTextView,
                                    range: NSRange,
                                    completion: @escaping (([HighlightRange]) -> Void)) {
-        do {
-            try queueLock.lock()
+        // Optimization: Calculate these outside the lock, if possible
+        let longQuery = range.length > Constants.maxSyncQueryLength
+        let longDocument = textView.documentRange.length > Constants.maxSyncContentLength
 
-            // Optimization: Calculate these outside the lock, if possible
-            let longQuery = range.length > Constants.maxSyncQueryLength
-            let longDocument = textView.documentRange.length > Constants.maxSyncContentLength
-
-            if hasOutstandingWork || longQuery || longDocument {
-                queryHighlightsForRangeAsync(range: range, completion: completion)
-            } else {
-                queryHighlightsForRange(range: range, runningAsync: false, completion: completion)
-            }
-
-            try queueLock.unlock()
-        } catch let error as PthreadError {
-            print("Pthread mutex error: \(error)")
-        } catch {
-            print("Unexpected error during highlight querying: \(error)")
+        if hasOutstandingWork || longQuery || longDocument {
+            queryHighlightsForRangeAsync(range: range, completion: completion)
+        } else {
+            queryHighlightsForRange(range: range, runningAsync: false, completion: completion)
         }
     }
 
@@ -244,24 +217,10 @@ public final class TreeSitterClient: HighlightProviding {
     /// Determines the next async job to run and returns it if it exists.
     /// Greedily returns queued highlight jobs determined by `Constants.simultaneousHighlightLimit`
     private func determineNextJob() -> QueuedTaskType? {
-        do {
-            try queueLock.lock()
-        } catch let error as PthreadError {
-            print("Pthread mutex error: \(error)")
-            return nil
-        } catch {
-            print("Unexpected error occurred")
-            return nil
-        }
+        queueLock.lock()
 
         defer {
-            do {
-                try queueLock.unlock()
-            } catch let error as PthreadError {
-                print("Pthread mutex error: \(error)")
-            } catch {
-                print("Unexpected error occurred")
-            }
+            queueLock.unlock()
         }
 
         // Get an edit task if any, otherwise get a highlight task if any.
@@ -278,17 +237,11 @@ public final class TreeSitterClient: HighlightProviding {
     }
 
     private func cancelAllRunningTasks() {
-        do {
-            try queueLock.lock()
-            runningTask?.cancel()
-            queuedEdits.removeAll()
-            queuedQueries.removeAll()
-            try queueLock.unlock()
-        } catch let error as PthreadError {
-            print("Pthread mutex error: \(error)")
-        } catch {
-            print("Unexpected error occurred during task cancellation: \(error)")
-        }
+        queueLock.lock()
+        runningTask?.cancel()
+        queuedEdits.removeAll()
+        queuedQueries.removeAll()
+        queueLock.unlock()
     }
 
     deinit {

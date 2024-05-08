@@ -40,70 +40,64 @@ extension TreeSitterClient {
     internal func applyEdit(editState: EditState, startAtLayerIndex: Int? = nil, runningAsync: Bool = false) {
         guard let readBlock, let textView, let state else { return }
 
-        do {
-            try stateLock.lock()
+        stateLock.lock()
 
-            // Loop through all layers, apply edits & find changed byte ranges.
-            let startIdx = startAtLayerIndex ?? 0
-            for layerIdx in (startIdx..<state.layers.count).reversed() {
-                let layer = state.layers[layerIdx]
+        // Loop through all layers, apply edits & find changed byte ranges.
+        let startIdx = startAtLayerIndex ?? 0
+        for layerIdx in (startIdx..<state.layers.count).reversed() {
+            let layer = state.layers[layerIdx]
 
-                if layer.id != state.primaryLayer.id {
-                    // Reversed for safe removal while looping
-                    for rangeIdx in (0..<layer.ranges.count).reversed() {
-                        layer.ranges[rangeIdx].applyInputEdit(editState.edit)
+            if layer.id != state.primaryLayer.id {
+                // Reversed for safe removal while looping
+                for rangeIdx in (0..<layer.ranges.count).reversed() {
+                    layer.ranges[rangeIdx].applyInputEdit(editState.edit)
 
-                        if layer.ranges[rangeIdx].length <= 0 {
-                            layer.ranges.remove(at: rangeIdx)
-                        }
+                    if layer.ranges[rangeIdx].length <= 0 {
+                        layer.ranges.remove(at: rangeIdx)
                     }
-                    if layer.ranges.isEmpty {
-                        state.removeLanguageLayer(at: layerIdx)
-                        continue
-                    }
-
-                    editState.touchedLayers.insert(layer)
+                }
+                if layer.ranges.isEmpty {
+                    state.removeLanguageLayer(at: layerIdx)
+                    continue
                 }
 
-                layer.parser.includedRanges = layer.ranges.map { $0.tsRange }
-                do {
-                    editState.rangeSet.insert(
-                        ranges: try layer.findChangedByteRanges(
-                            textView: textView,
-                            edit: editState.edit,
-                            timeout: runningAsync ? nil : Constants.parserTimeout,
-                            readBlock: readBlock
-                        )
-                    )
-                } catch {
-                    // Timed out, queue an async edit with any data already computed.
-                    if !runningAsync {
-                        applyEditAsync(editState: editState, startAtLayerIndex: layerIdx)
-                    }
-                    try stateLock.unlock()
-                    return
-                }
-
-                editState.layerSet.insert(layer)
+                editState.touchedLayers.insert(layer)
             }
 
-            // Update the state object for any new injections that may have been caused by this edit.
-            editState.rangeSet.formUnion(
-                state.updateInjectedLayers(textView: textView, touchedLayers: editState.touchedLayers)
-            )
-
-            try stateLock.unlock()
-            if runningAsync {
-                DispatchQueue.main.async {
-                    editState.completion(editState.rangeSet)
+            layer.parser.includedRanges = layer.ranges.map { $0.tsRange }
+            do {
+                editState.rangeSet.insert(
+                    ranges: try layer.findChangedByteRanges(
+                        textView: textView,
+                        edit: editState.edit,
+                        timeout: runningAsync ? nil : Constants.parserTimeout,
+                        readBlock: readBlock
+                    )
+                )
+            } catch {
+                // Timed out, queue an async edit with any data already computed.
+                if !runningAsync {
+                    applyEditAsync(editState: editState, startAtLayerIndex: layerIdx)
                 }
-            } else {
+                stateLock.unlock()
+                return
+            }
+
+            editState.layerSet.insert(layer)
+        }
+
+        // Update the state object for any new injections that may have been caused by this edit.
+        editState.rangeSet.formUnion(
+            state.updateInjectedLayers(textView: textView, touchedLayers: editState.touchedLayers)
+        )
+
+        stateLock.unlock()
+        if runningAsync {
+            DispatchQueue.main.async {
                 editState.completion(editState.rangeSet)
             }
-        } catch let error as PthreadError {
-            print("Pthread mutex error: \(error)")
-        } catch {
-            print("Unexpected error during setup: \(error)")
+        } else {
+            editState.completion(editState.rangeSet)
         }
     }
 

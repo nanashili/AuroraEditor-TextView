@@ -15,50 +15,43 @@ extension TreeSitterClient {
         runningAsync: Bool,
         completion: @escaping (([HighlightRange]) -> Void)
     ) {
-        do {
-            try stateLock.lock()
-            guard let textView, let state = state?.copy() else { return }
-            try stateLock.unlock()
+        stateLock.lock()
+        guard let textView, let state = state?.copy() else { return }
+        stateLock.unlock()
 
-            var highlights: [HighlightRange] = []
-            var injectedSet = IndexSet(integersIn: range)
+        var highlights: [HighlightRange] = []
+        var injectedSet = IndexSet(integersIn: range)
 
-            for layer in state.layers where layer.id != state.primaryLayer.id {
-                // Query injected only if a layer's ranges intersects with `range`
-                for layerRange in layer.ranges {
-                    if let rangeIntersection = range.intersection(layerRange) {
-                        highlights.append(contentsOf: queryLayerHighlights(
-                            layer: layer,
-                            textView: textView,
-                            range: rangeIntersection
-                        ))
+        for layer in state.layers where layer.id != state.primaryLayer.id {
+            // Query injected only if a layer's ranges intersects with `range`
+            for layerRange in layer.ranges {
+                if let rangeIntersection = range.intersection(layerRange) {
+                    highlights.append(contentsOf: queryLayerHighlights(
+                        layer: layer,
+                        textView: textView,
+                        range: rangeIntersection
+                    ))
 
-                        injectedSet.remove(integersIn: rangeIntersection)
-                    }
+                    injectedSet.remove(integersIn: rangeIntersection)
                 }
             }
+        }
 
-            // Query primary for any ranges that weren't used in the injected layers.
-            for range in injectedSet.rangeView {
-                highlights.append(contentsOf: queryLayerHighlights(
-                    layer: state.layers[0],
-                    textView: textView,
-                    range: NSRange(range)
-                ))
-            }
+        // Query primary for any ranges that weren't used in the injected layers.
+        for range in injectedSet.rangeView {
+            highlights.append(contentsOf: queryLayerHighlights(
+                layer: state.layers[0],
+                textView: textView,
+                range: NSRange(range)
+            ))
+        }
 
-            try stateLock.unlock()
-            if !runningAsync {
+        if !runningAsync {
+            completion(highlights)
+        } else {
+            DispatchQueue.main.async {
                 completion(highlights)
-            } else {
-                DispatchQueue.main.async {
-                    completion(highlights)
-                }
             }
-        } catch let error as PthreadError {
-            print("Pthread mutex error: \(error)")
-        } catch {
-            print("Unexpected error during setup: \(error)")
         }
     }
 

@@ -70,6 +70,8 @@ extension TextViewController {
     private func setUpDeletePairFilters(pairs: [(String, String)]) {
         for pair in pairs {
             let filter = DeleteCloseFilter(open: pair.0, close: pair.1)
+            // Github issue: #663
+            // Thread 1: EXC_BAD_ACCESS (code=1, address=0x100000000)
             textFilters.append(filter)
         }
     }

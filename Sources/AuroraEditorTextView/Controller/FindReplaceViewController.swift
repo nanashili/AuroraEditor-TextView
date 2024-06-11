@@ -11,11 +11,11 @@ import Cocoa
 public class FindReplaceViewController: NSViewController {
     let findTextField = NSTextField()
     let replaceTextField = NSTextField()
-    let nextButton = NSButton(title: "Next", target: self, action: #selector(nextButtonClicked(_:)))
-    let previousButton = NSButton(title: "Previous", target: self, action: #selector(previousButtonClicked(_:)))
-    let replaceButton = NSButton(title: "Replace", target: self, action: #selector(replaceButtonClicked(_:)))
-    let replaceAllButton = NSButton(title: "Replace All", target: self, action: #selector(replaceAllButtonClicked(_:)))
-    let doneButton = NSButton(title: "Done", target: self, action: #selector(doneButtonClicked(_:)))
+    let nextButton = NSButton(title: "Next", target: FindReplaceViewController.self, action: #selector(nextButtonClicked(_:)))
+    let previousButton = NSButton(title: "Previous", target: FindReplaceViewController.self, action: #selector(previousButtonClicked(_:)))
+    let replaceButton = NSButton(title: "Replace", target: FindReplaceViewController.self, action: #selector(replaceButtonClicked(_:)))
+    let replaceAllButton = NSButton(title: "Replace All", target: FindReplaceViewController.self, action: #selector(replaceAllButtonClicked(_:)))
+    let doneButton = NSButton(title: "Done", target: FindReplaceViewController.self, action: #selector(doneButtonClicked(_:)))
     let matchCaseCheck = NSButton(checkboxWithTitle: "Match Case", target: nil, action: nil)
     let containsCheck = NSButton(checkboxWithTitle: "Contains", target: nil, action: nil)
 

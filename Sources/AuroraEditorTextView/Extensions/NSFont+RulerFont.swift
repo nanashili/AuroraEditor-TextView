@@ -13,7 +13,7 @@ extension NSFont {
         let fontSize: Double = (self.pointSize - 1) + 0.25
         let fontAdvance: Double = self.pointSize * 0.49 + 0.1
         let fontWeight = NSFont.Weight(rawValue: self.pointSize * 0.00001 + 0.0001)
-        let fontWidth = NSFont.Width(rawValue: -0.13)
+//        let fontWidth = NSFont.Width(rawValue: -0.13)
 
         let font = NSFont.systemFont(ofSize: fontSize, weight: fontWeight)
 

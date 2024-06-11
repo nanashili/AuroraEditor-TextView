@@ -15,6 +15,7 @@ extension TreeSitterClient {
         runningAsync: Bool,
         completion: @escaping (([HighlightRange]) -> Void)
     ) {
+        logger.debug("Starting queryHighlightsForRange.")
         stateLock.lock()
         guard let textView, let state = state?.copy() else { return }
         stateLock.unlock()
@@ -22,10 +23,14 @@ extension TreeSitterClient {
         var highlights: [HighlightRange] = []
         var injectedSet = IndexSet(integersIn: range)
 
+        logger.debug("Query injected only if a layer's ranges intersects with `range`")
         for layer in state.layers where layer.id != state.primaryLayer.id {
             // Query injected only if a layer's ranges intersects with `range`
             for layerRange in layer.ranges {
+                logger.debug("RANGE=\(layerRange)")
                 if let rangeIntersection = range.intersection(layerRange) {
+                    logger.debug("We have a range intersection")
+
                     highlights.append(contentsOf: queryLayerHighlights(
                         layer: layer,
                         textView: textView,
@@ -37,6 +42,7 @@ extension TreeSitterClient {
             }
         }
 
+        logger.debug("Query primary for any ranges that weren't used in the injected layers.")
         // Query primary for any ranges that weren't used in the injected layers.
         for range in injectedSet.rangeView {
             highlights.append(contentsOf: queryLayerHighlights(
@@ -47,9 +53,11 @@ extension TreeSitterClient {
         }
 
         if !runningAsync {
+            logger.debug("Running on current thread \(Thread.current) which \(Thread.isMainThread ? "is" : "isn't") a main thread")
             completion(highlights)
         } else {
             DispatchQueue.main.async {
+                self.logger.debug("Async running on mainthread")
                 completion(highlights)
             }
         }
@@ -59,9 +67,16 @@ extension TreeSitterClient {
         range: NSRange,
         completion: @escaping (([HighlightRange]) -> Void)
     ) {
+        if queuedQueries.count > 255 { // It seems to crash on 256
+            logger.error("Outstanding queries are more then 255, we do not append.")
+            return
+        }
         queuedQueries.append {
+            // Github issue: #664
+            // ERROR: Thread 8: EXC_BAD_ACCESS (code=1, address=0x48)
             self.queryHighlightsForRange(range: range, runningAsync: true, completion: completion)
         }
+
         beginTasksIfNeeded()
     }
 

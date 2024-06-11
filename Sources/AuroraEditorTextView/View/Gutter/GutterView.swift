@@ -210,7 +210,7 @@ public class GutterView: NSView {
             let lineNumber = linePosition.index + 1
             let textPosition = lineNumberPositions[lineNumber] ?? .zero
 
-            var textColor: NSColor = self.textColor
+//            var textColor: NSColor = self.textColor
 
             // Check if this line number was clicked and draw the background image
             if clickedLineNumbers.contains(lineNumber) {

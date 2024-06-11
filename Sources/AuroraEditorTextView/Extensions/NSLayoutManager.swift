@@ -9,6 +9,7 @@ import AppKit
 
 extension NSLayoutManager {
     func characterRange(forGlyphRange glyphRange: NSRange, actualGlyphRange: NSRangePointer?) -> NSRange {
+        // WARNING: Function call causes an infinite recursion
         return self.characterRange(forGlyphRange: glyphRange, actualGlyphRange: actualGlyphRange)
     }
 

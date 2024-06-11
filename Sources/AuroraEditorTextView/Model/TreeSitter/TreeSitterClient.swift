@@ -8,6 +8,7 @@
 import Foundation
 import AuroraEditorLanguage
 import SwiftTreeSitter
+import OSLog
 
 /// `TreeSitterClient` is a class that manages applying edits for and querying captures for a syntax tree.
 /// It handles queuing edits, processing them with the given text, and invalidating indices in the text for efficient
@@ -57,6 +58,8 @@ public final class TreeSitterClient: HighlightProviding {
     /// The internal tree-sitter layer tree object.
     internal var state: TreeSitterState?
     internal var textProvider: ResolvingQueryCursor.TextProvider
+
+    internal let logger = Logger(subsystem: "com.auroraeditor.textview", category: "TreeSitterClient")
 
     // MARK: - Constants
 
@@ -189,6 +192,7 @@ public final class TreeSitterClient: HighlightProviding {
     /// The task will run until `determineNextTask` returns nil. It will run any highlight jobs in parallel.
     internal func beginTasksIfNeeded() {
         guard runningTask == nil && (queuedEdits.count > 0 || queuedQueries.count > 0) else { return }
+
         runningTask = Task.detached(priority: .userInitiated) {
             defer {
                 self.runningTask = nil
@@ -201,16 +205,22 @@ public final class TreeSitterClient: HighlightProviding {
                     case .edit(let job):
                         job()
                     case .highlight(let jobs):
+                        self.logger.debug("withTaskGroup \(jobs.count)")
                         await withTaskGroup(of: Void.self, body: { taskGroup in
                             for job in jobs {
                                 taskGroup.addTask {
+                                    self.logger.debug("TASK: \(type(of: job)).")
                                     job()
+                                    self.logger.debug("TASK: \(type(of: job)), finished.")
                                 }
                             }
                         })
+                        self.logger.debug("withTaskGroup \(jobs.count) finished.")
                     }
                 }
-            } catch { }
+            } catch {
+                self.logger.error("\(error)")
+            }
         }
     }
 
@@ -228,15 +238,29 @@ public final class TreeSitterClient: HighlightProviding {
             return .edit(job: queuedEdits.removeFirst())
         } else if queuedQueries.count > 0 {
             let jobCount = min(queuedQueries.count, Constants.simultaneousHighlightLimit)
-            let jobs = Array(queuedQueries[0..<jobCount])
-            queuedQueries.removeFirst(jobCount)
-            return .highlight(jobs: jobs)
+            if queuedQueries.count >= jobCount {
+                let jobs = Array(queuedQueries[0..<jobCount])
+
+                if !queuedQueries.isEmpty {
+                    logger.debug("We have \(self.queuedQueries.count) jobs, we need to drop the first \(jobCount) jobs")
+//                    queuedQueries.removeFirst(jobCount)
+
+                    for _ in 0..<jobCount where !queuedQueries.isEmpty {
+                        queuedQueries.removeFirst()
+                    }
+                }
+
+                logger.debug("We should highlight \(jobs.count) jobs.")
+                return .highlight(jobs: jobs)
+            }
+            return nil
         } else {
             return nil
         }
     }
 
     private func cancelAllRunningTasks() {
+        logger.debug("Cancelling all tasks")
         queueLock.lock()
         runningTask?.cancel()
         queuedEdits.removeAll()

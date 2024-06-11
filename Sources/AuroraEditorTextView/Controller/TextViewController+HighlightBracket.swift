@@ -14,7 +14,7 @@ extension TextViewController {
     /// it searches for its matching pair and highlights both. The method supports different
     /// highlighting styles based on the `bracketPairHighlight` property.
     internal func highlightSelectionPairs() {
-        guard let bracketPairHighlight = bracketPairHighlight else { return }
+//        guard let bracketPairHighlight = bracketPairHighlight else { return }
         removeHighlightLayers()
 
         for range in textView.selectionManager.textSelections.map({ $0.range }) {
@@ -209,7 +209,7 @@ extension TextViewController {
 
             let positionAnim = self.createPositionAnimation(for: rectToHighlight, withDuration: duration)
 
-            var betweenSize = rectToHighlight.insetBy(dx: -2, dy: -2)
+            let betweenSize = rectToHighlight.insetBy(dx: -2, dy: -2)
             let boundsAnim = CAKeyframeAnimation(keyPath: "bounds")
             boundsAnim.keyTimes = [0, 0.05, 1]
             boundsAnim.values = [NSValue(rect: rectToHighlight), NSValue(rect: betweenSize), NSValue(rect: rectToHighlight)]
